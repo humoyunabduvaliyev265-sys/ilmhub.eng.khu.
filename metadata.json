@@ -1,0 +1,10 @@
+{
+  "name": "ILMHUB ENGLISH by KHUMOYUN",
+  "description": "Interactive English-learning platform by Khumoyun with A1–C2 levels, vocabulary flashcards, grammar lessons, listening & speaking, rigorous test engine, and administrative student management.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
