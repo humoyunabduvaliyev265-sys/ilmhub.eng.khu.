@@ -1,0 +1,109 @@
+{
+  "users": [
+    {
+      "id": "usr-1790151922610-f6cb16",
+      "username": "teststudent",
+      "passwordHash": "b860b038330b7a282a1807f8061fa784f705200461cfe109fb70246da01e77a0dffa1d4f22060565c93b3b045b14818d0f471155bfb0e395fbd34fb57f8420bd",
+      "salt": "b69a769e3bb2af214fa3d68a62419773",
+      "tempPasswordDisplay": "Test12345",
+      "fullName": "Test Student",
+      "email": "teststudent@ilmhub.uz",
+      "role": "student",
+      "isActive": true,
+      "createdAt": "2026-09-23T08:25:22.610Z",
+      "level": "B1",
+      "progress": {
+        "xp": 205,
+        "streakDays": 1,
+        "lastActiveDate": "2026-09-23",
+        "completedLessons": [
+          "l-b1-1-1",
+          "l-b1-1-2"
+        ],
+        "masteredVocab": [
+          "v-b1-1",
+          "v-b1-2"
+        ],
+        "reviewVocab": [],
+        "favoriteVocab": [],
+        "testScores": [
+          {
+            "id": "score-1790151922776",
+            "date": "2026-09-23T08:25:22.776Z",
+            "testSize": 10,
+            "score": 9,
+            "totalQuestions": 10,
+            "percentage": 90,
+            "level": "B1",
+            "timeSpentSeconds": 180
+          }
+        ],
+        "unlockedAchievements": [
+          "ach-test-ace",
+          "ach-xp-100"
+        ],
+        "currentLevel": "B1",
+        "dailyGoalXp": 50,
+        "todayXp": 205
+      },
+      "notes": "Cross-device verification account",
+      "lastLoginAt": "2026-09-23T08:25:22.892Z"
+    },
+    {
+      "id": "usr-admin-1",
+      "username": "humoyun_fjx",
+      "fullName": "Khumoyun Abduvaliyev",
+      "email": "humoyunabduvaliyev265@gmail.com",
+      "role": "admin",
+      "isActive": true,
+      "createdAt": "2026-01-15T10:00:00Z",
+      "lastLoginAt": "2026-09-23T08:25:22.550Z",
+      "level": "C2",
+      "progress": {
+        "xp": 850,
+        "streakDays": 14,
+        "lastActiveDate": "2026-09-23",
+        "completedLessons": [
+          "l-a1-1-1"
+        ],
+        "masteredVocab": [
+          "v-a1-1",
+          "v-a1-2"
+        ],
+        "reviewVocab": [
+          "v-a1-3"
+        ],
+        "favoriteVocab": [
+          "v-a1-1"
+        ],
+        "testScores": [],
+        "unlockedAchievements": [
+          "ach-first-step",
+          "ach-vocab-5"
+        ],
+        "currentLevel": "C2",
+        "dailyGoalXp": 50,
+        "todayXp": 50
+      },
+      "notes": "Platform Administrator & Lead Instructor",
+      "passwordHash": "e1fbbf92e22f942d4748c220b3f2cb8f872b899c625d79fd53d067f4340f0131891e5181ed5a66e0142b7be32aec9543baafdb69bf9907e8ae744c396f83333f",
+      "salt": "dbe3bb9a75217950127bb842c6043aaf",
+      "tempPasswordDisplay": "admin_fjx_secure"
+    }
+  ],
+  "sessions": [
+    {
+      "token": "ilm_9b86dbe1b1c78bf8ef2036a4743818c2b935c9dd5c53db2011e4369440e96716",
+      "userId": "usr-admin-1",
+      "createdAt": "2026-09-23T08:25:22.550Z",
+      "expiresAt": "2026-10-23T08:25:22.550Z"
+    },
+    {
+      "token": "ilm_4df5c6e758a4b0f453fd0766c1f9bfe8cf4988844130677830db5de2898d4503",
+      "userId": "usr-1790151922610-f6cb16",
+      "createdAt": "2026-09-23T08:25:22.892Z",
+      "expiresAt": "2026-10-23T08:25:22.892Z"
+    }
+  ],
+  "adminSecurityCode": "123"
+}

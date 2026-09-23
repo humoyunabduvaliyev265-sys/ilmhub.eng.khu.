@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccount, EnglishLevel } from '../types';
 import { BrandLogo } from './BrandLogo';
+import { api } from '../utils/api';
 import {
   getStoredUsers,
-  createUserAccount,
-  updateUserAccount,
-  deleteUserAccount,
   INITIAL_ADMIN_USERNAME
 } from '../utils/storage';
 import {
@@ -30,7 +28,9 @@ import {
   SlidersHorizontal,
   Check,
   Sun,
-  Moon
+  Moon,
+  Database,
+  Loader2
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -52,6 +52,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -83,46 +85,69 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Revealed passwords map
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
 
-  const refreshList = () => {
-    setUsers(getStoredUsers());
+  const refreshList = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const res = await api.getAdminUsers();
+      if (res.success && res.users) {
+        setUsers(res.users);
+      } else {
+        setUsers(getStoredUsers());
+      }
+    } catch {
+      setUsers(getStoredUsers());
+    } finally {
+      setIsLoadingUsers(false);
+    }
   };
+
+  useEffect(() => {
+    refreshList();
+  }, []);
 
   const showNotification = (msg: string) => {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(''), 3500);
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
+    setIsSubmitting(true);
 
-    const res = createUserAccount({
-      username: newUsername,
-      password: newPassword,
-      fullName: newFullName,
-      email: newEmail,
-      level: newLevel,
-      isActive: newIsActive,
-      notes: newNotes
-    });
+    try {
+      const res = await api.createStudent({
+        username: newUsername,
+        password: newPassword,
+        fullName: newFullName,
+        email: newEmail,
+        level: newLevel,
+        isActive: newIsActive,
+        notes: newNotes
+      });
+      setIsSubmitting(false);
 
-    if (!res.success) {
-      setFormError(res.error || 'Failed to create user');
-      return;
+      if (!res.success || !res.user) {
+        setFormError(res.error || 'Failed to create student');
+        return;
+      }
+
+      await refreshList();
+      setShowCreateModal(false);
+      showNotification(`Student "${newUsername}" created in central database! Works on any device.`);
+
+      // Reset form
+      setNewUsername('');
+      setNewPassword('');
+      setNewFullName('');
+      setNewEmail('');
+      setNewLevel('B1');
+      setNewIsActive(true);
+      setNewNotes('');
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setFormError(err.message || 'Creation failed');
     }
-
-    refreshList();
-    setShowCreateModal(false);
-    showNotification(`User "${newUsername}" created successfully!`);
-
-    // Reset form
-    setNewUsername('');
-    setNewPassword('');
-    setNewFullName('');
-    setNewEmail('');
-    setNewLevel('B1');
-    setNewIsActive(true);
-    setNewNotes('');
   };
 
   const handleOpenEdit = (user: UserAccount) => {
@@ -135,67 +160,101 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setFormError('');
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    setIsSubmitting(true);
 
-    const res = updateUserAccount(editingUser.id, {
-      fullName: editFullName,
-      email: editEmail,
-      level: editLevel,
-      isActive: editIsActive,
-      notes: editNotes
-    });
+    try {
+      const res = await api.updateStudent(editingUser.id, {
+        fullName: editFullName,
+        email: editEmail,
+        level: editLevel,
+        isActive: editIsActive,
+        notes: editNotes
+      });
+      setIsSubmitting(false);
 
-    if (!res.success) {
-      setFormError(res.error || 'Failed to update user');
-      return;
+      if (!res.success) {
+        setFormError(res.error || 'Failed to update student');
+        return;
+      }
+
+      await refreshList();
+      setEditingUser(null);
+      showNotification(`Student account "${editingUser.username}" updated in central database!`);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setFormError(err.message || 'Update failed');
     }
-
-    refreshList();
-    setEditingUser(null);
-    showNotification(`Account "${editingUser.username}" updated!`);
   };
 
-  const handleToggleStatus = (user: UserAccount) => {
+  const handleToggleStatus = async (user: UserAccount) => {
     if (user.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase()) {
       alert('Admin account status cannot be deactivated');
       return;
     }
 
     const updated = !user.isActive;
-    updateUserAccount(user.id, { isActive: updated });
-    refreshList();
-    showNotification(`Account "${user.username}" is now ${updated ? 'Active' : 'Deactivated'}`);
+    const res = await api.updateStudent(user.id, { isActive: updated });
+    if (res.success) {
+      await refreshList();
+      showNotification(
+        `Account "${user.username}" is now ${updated ? 'Active' : 'Disabled across all devices'}`
+      );
+    } else {
+      alert(res.error || 'Failed to update status');
+    }
   };
 
-  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resettingUser) return;
     if (!newResetPassword.trim()) {
       setFormError('New password cannot be empty');
       return;
     }
+    setIsSubmitting(true);
 
-    updateUserAccount(resettingUser.id, { password: newResetPassword.trim() });
-    refreshList();
-    setResettingUser(null);
-    setNewResetPassword('');
-    showNotification(`Password reset successfully for "${resettingUser.username}"!`);
+    try {
+      const res = await api.resetStudentPassword(resettingUser.id, newResetPassword.trim());
+      setIsSubmitting(false);
+
+      if (!res.success) {
+        setFormError(res.error || 'Failed to reset password');
+        return;
+      }
+
+      await refreshList();
+      setResettingUser(null);
+      setNewResetPassword('');
+      showNotification(`Password reset in central database for "${resettingUser.username}"!`);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setFormError(err.message || 'Password reset failed');
+    }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!deletingUser) return;
+    setIsSubmitting(true);
 
-    const res = deleteUserAccount(deletingUser.id);
-    if (!res.success) {
-      alert(res.error || 'Failed to delete');
-      return;
+    try {
+      const res = await api.deleteStudent(deletingUser.id);
+      setIsSubmitting(false);
+
+      if (!res.success) {
+        alert(res.error || 'Failed to delete');
+        return;
+      }
+
+      await refreshList();
+      showNotification(`Student "${deletingUser.username}" removed from central database`);
+      setDeletingUser(null);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      alert(err.message || 'Deletion failed');
     }
-
-    refreshList();
-    showNotification(`User "${deletingUser.username}" has been removed`);
-    setDeletingUser(null);
   };
 
   const togglePasswordReveal = (userId: string) => {

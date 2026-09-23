@@ -39,9 +39,9 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   );
   const [profileSaved, setProfileSaved] = useState(false);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = updateUserAccount(currentUser.id, {
+    const res = await updateUserAccount(currentUser.id, {
       fullName,
       email,
       progress: {
@@ -54,7 +54,9 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
           reviewVocab: [],
           favoriteVocab: [],
           testScores: [],
-          achievements: []
+          unlockedAchievements: [],
+          currentLevel: currentUser.level,
+          dailyGoalXp: 50
         }),
         dailyGoalXp: dailyGoal
       }
@@ -67,26 +69,23 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
     }
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordMsg(null);
-
-    if (currentPassword !== currentUser.password) {
-      setPasswordMsg({ type: 'error', text: 'Current password is incorrect' });
-      return;
-    }
 
     if (!newPassword.trim() || newPassword.length < 4) {
       setPasswordMsg({ type: 'error', text: 'New password must be at least 4 characters' });
       return;
     }
 
-    const res = updateUserAccount(currentUser.id, { password: newPassword.trim() });
+    const res = await updateUserAccount(currentUser.id, { password: newPassword.trim() });
     if (res.success && res.user) {
       onUpdateCurrentUser(res.user);
-      setPasswordMsg({ type: 'success', text: 'Password changed successfully!' });
+      setPasswordMsg({ type: 'success', text: 'Password changed successfully in central database!' });
       setCurrentPassword('');
       setNewPassword('');
+    } else {
+      setPasswordMsg({ type: 'error', text: res.error || 'Failed to update password' });
     }
   };
 

@@ -1,4 +1,5 @@
 import { UserAccount, UserProgress, EnglishLevel, TestScoreHistory } from '../types';
+import { api, getAuthToken, setAuthToken, clearAuthToken } from './api';
 
 const USERS_STORAGE_KEY = 'ilmhub_english_users_v2';
 const CURRENT_USER_ID_KEY = 'ilmhub_english_current_user_id_v2';
@@ -6,94 +7,97 @@ const THEME_STORAGE_KEY = 'ilmhub_english_theme';
 
 export const INITIAL_ADMIN_USERNAME = 'humoyun_fjx';
 export const ADMIN_SECURITY_CODE = '123';
-
-const DEFAULT_ADMIN_PASSWORD = 'admin_fjx_secure';
+export const DEFAULT_ADMIN_PASSWORD = 'admin_fjx_secure';
 
 const INITIAL_PROGRESS: UserProgress = {
-  xp: 120,
-  streakDays: 4,
+  xp: 850,
+  streakDays: 14,
   lastActiveDate: new Date().toISOString().split('T')[0],
   completedLessons: ['l-a1-1-1'],
   masteredVocab: ['v-a1-1', 'v-a1-2'],
   reviewVocab: ['v-a1-3'],
   favoriteVocab: ['v-a1-1'],
-  testScores: [
-    {
-      id: 'score-init-1',
-      date: new Date(Date.now() - 86400000 * 2).toISOString(),
-      testSize: 10,
-      score: 9,
-      totalQuestions: 10,
-      percentage: 90,
-      level: 'B1',
-      timeSpentSeconds: 245
-    }
-  ],
+  testScores: [],
   unlockedAchievements: ['ach-first-step', 'ach-vocab-5'],
-  currentLevel: 'B1',
+  currentLevel: 'C2',
   dailyGoalXp: 50,
-  todayXp: 35
+  todayXp: 50
 };
 
-const INITIAL_USERS: UserAccount[] = [
-  {
-    id: 'usr-admin-1',
-    username: INITIAL_ADMIN_USERNAME,
-    password: DEFAULT_ADMIN_PASSWORD,
-    fullName: 'Khumoyun Abduvaliyev',
-    email: 'humoyunabduvaliyev265@gmail.com',
-    role: 'admin',
-    isActive: true,
-    createdAt: '2026-01-15T10:00:00Z',
-    lastLoginAt: new Date().toISOString(),
-    level: 'C2',
-    progress: {
-      ...INITIAL_PROGRESS,
-      xp: 850,
-      streakDays: 14,
-      currentLevel: 'C2',
-      todayXp: 50
-    },
-    notes: 'Platform Administrator'
-  }
-];
+const INITIAL_ADMIN: UserAccount = {
+  id: 'usr-admin-1',
+  username: INITIAL_ADMIN_USERNAME,
+  password: DEFAULT_ADMIN_PASSWORD,
+  fullName: 'Khumoyun Abduvaliyev',
+  email: 'humoyunabduvaliyev265@gmail.com',
+  role: 'admin',
+  isActive: true,
+  createdAt: '2026-01-15T10:00:00Z',
+  lastLoginAt: new Date().toISOString(),
+  level: 'C2',
+  progress: INITIAL_PROGRESS,
+  notes: 'Platform Administrator'
+};
+
+// In-memory runtime cache for seamless synchronous React renders
+let runtimeUsersCache: UserAccount[] = [INITIAL_ADMIN];
 
 export function getStoredUsers(): UserAccount[] {
-  if (typeof window === 'undefined') return INITIAL_USERS;
+  if (typeof window === 'undefined') return [INITIAL_ADMIN];
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(INITIAL_USERS));
-      return INITIAL_USERS;
+    if (raw) {
+      const parsed: UserAccount[] = JSON.parse(raw);
+      // Ensure admin exists and clean up demo accounts
+      const cleaned = parsed.filter(u => !['usr-student-1', 'usr-student-2', 'usr-student-3'].includes(u.id));
+      if (!cleaned.some(u => u.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase())) {
+        cleaned.unshift(INITIAL_ADMIN);
+      }
+      runtimeUsersCache = cleaned;
+      return cleaned;
     }
-    let parsed: UserAccount[] = JSON.parse(raw);
-
-    // Remove legacy auto-seeded demo accounts (users must NOT be created automatically)
-    parsed = parsed.filter(u => !['usr-student-1', 'usr-student-2', 'usr-student-3'].includes(u.id));
-
-    // Ensure admin exists
-    if (!parsed.some(u => u.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase())) {
-      parsed.unshift(INITIAL_USERS[0]);
-    }
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(parsed));
-    return parsed;
   } catch {
-    return INITIAL_USERS;
+    // Fall back to cache
   }
+  return runtimeUsersCache;
 }
 
 export function saveStoredUsers(users: UserAccount[]): void {
+  runtimeUsersCache = users;
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
   } catch (err) {
-    console.error('Failed to save users to localStorage', err);
+    console.error('Failed to save users cache', err);
   }
+}
+
+// Background sync to fetch central users list from backend server
+export async function syncUsersWithBackend(): Promise<UserAccount[]> {
+  try {
+    const res = await api.getAdminUsers();
+    if (res.success && res.users) {
+      saveStoredUsers(res.users);
+      return res.users;
+    }
+  } catch {
+    // If offline or non-admin, retain cache
+  }
+  return getStoredUsers();
 }
 
 export function getCurrentUserId(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem(CURRENT_USER_ID_KEY);
+}
+
+export function setCurrentUserId(userId: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (userId) {
+    localStorage.setItem(CURRENT_USER_ID_KEY, userId);
+  } else {
+    localStorage.removeItem(CURRENT_USER_ID_KEY);
+  }
 }
 
 export function getCurrentUser(): UserAccount | null {
@@ -105,15 +109,8 @@ export function getCurrentUser(): UserAccount | null {
 
 export function logoutUser(): void {
   setCurrentUserId(null);
-}
-
-export function setCurrentUserId(userId: string | null): void {
-  if (typeof window === 'undefined') return;
-  if (userId) {
-    localStorage.setItem(CURRENT_USER_ID_KEY, userId);
-  } else {
-    localStorage.removeItem(CURRENT_USER_ID_KEY);
-  }
+  clearAuthToken();
+  api.logout().catch(() => {});
 }
 
 export function getStoredTheme(): 'light' | 'dark' {
@@ -141,7 +138,7 @@ export function setStoredTheme(theme: 'light' | 'dark'): void {
   }
 }
 
-export function createUserAccount(data: {
+export async function createUserAccount(data: {
   username: string;
   password: string;
   fullName: string;
@@ -149,99 +146,61 @@ export function createUserAccount(data: {
   level: EnglishLevel;
   isActive: boolean;
   notes?: string;
-}): { success: boolean; error?: string; user?: UserAccount } {
-  const users = getStoredUsers();
-  const trimmedUsername = data.username.trim().toLowerCase();
-
-  if (!trimmedUsername) {
-    return { success: false, error: 'Username is required' };
+}): Promise<{ success: boolean; error?: string; user?: UserAccount }> {
+  // Call real backend database
+  const res = await api.createStudent(data);
+  if (res.success && res.user) {
+    const current = getStoredUsers();
+    saveStoredUsers([res.user, ...current.filter(u => u.id !== res.user!.id)]);
+    return { success: true, user: res.user };
   }
-  if (!data.password.trim()) {
-    return { success: false, error: 'Password is required' };
-  }
-  if (!data.fullName.trim()) {
-    return { success: false, error: 'Full name is required' };
-  }
-  if (users.some(u => u.username.toLowerCase() === trimmedUsername)) {
-    return { success: false, error: `Username "${trimmedUsername}" is already taken` };
-  }
-
-  const newUser: UserAccount = {
-    id: 'usr-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-    username: trimmedUsername,
-    password: data.password.trim(),
-    fullName: data.fullName.trim(),
-    email: data.email?.trim() || `${trimmedUsername}@ilmhub.uz`,
-    role: 'student',
-    isActive: data.isActive,
-    createdAt: new Date().toISOString(),
-    level: data.level,
-    progress: {
-      xp: 0,
-      streakDays: 1,
-      lastActiveDate: new Date().toISOString().split('T')[0],
-      completedLessons: [],
-      masteredVocab: [],
-      reviewVocab: [],
-      favoriteVocab: [],
-      testScores: [],
-      unlockedAchievements: [],
-      currentLevel: data.level,
-      dailyGoalXp: 50,
-      todayXp: 0
-    },
-    notes: data.notes?.trim() || 'Created by Administrator.'
-  };
-
-  const updatedUsers = [newUser, ...users];
-  saveStoredUsers(updatedUsers);
-  return { success: true, user: newUser };
+  return { success: false, error: res.error || 'Failed to create student in central database' };
 }
 
-export function updateUserAccount(
+export async function updateUserAccount(
   id: string,
   updates: Partial<Omit<UserAccount, 'id' | 'createdAt'>>
-): { success: boolean; error?: string; user?: UserAccount } {
+): Promise<{ success: boolean; error?: string; user?: UserAccount }> {
+  // Optimistically update local cache
   const users = getStoredUsers();
   const index = users.findIndex(u => u.id === id);
-  if (index === -1) {
-    return { success: false, error: 'User not found' };
+  if (index !== -1) {
+    const existing = users[index];
+    const updatedUser: UserAccount = {
+      ...existing,
+      ...updates,
+      progress: updates.progress ? { ...existing.progress, ...updates.progress } : existing.progress
+    };
+    users[index] = updatedUser;
+    saveStoredUsers([...users]);
   }
 
-  if (updates.username) {
-    const trimmed = updates.username.trim().toLowerCase();
-    if (users.some(u => u.id !== id && u.username.toLowerCase() === trimmed)) {
-      return { success: false, error: 'Username is already taken by another account' };
+  // Call central backend API
+  const res = await api.updateStudent(id, updates);
+  if (res.success && res.user) {
+    const current = getStoredUsers();
+    const idx = current.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      current[idx] = res.user;
+      saveStoredUsers([...current]);
     }
-    updates.username = trimmed;
+    return { success: true, user: res.user };
   }
-
-  const existing = users[index];
-  const updatedUser: UserAccount = {
-    ...existing,
-    ...updates,
-    // ensure progress object isn't completely wiped if partial
-    progress: updates.progress ? { ...existing.progress, ...updates.progress } : existing.progress
-  };
-
-  users[index] = updatedUser;
-  saveStoredUsers(users);
-  return { success: true, user: updatedUser };
+  return { success: res.success, error: res.error, user: users[index] };
 }
 
-export function deleteUserAccount(id: string): { success: boolean; error?: string } {
+export async function deleteUserAccount(id: string): Promise<{ success: boolean; error?: string }> {
   const users = getStoredUsers();
   const user = users.find(u => u.id === id);
-  if (!user) {
-    return { success: false, error: 'User not found' };
-  }
-  if (user.role === 'admin' || user.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase()) {
+  if (user && (user.role === 'admin' || user.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase())) {
     return { success: false, error: 'Cannot delete the primary Administrator account' };
   }
 
-  const filtered = users.filter(u => u.id !== id);
-  saveStoredUsers(filtered);
-  return { success: true };
+  // Update local cache
+  saveStoredUsers(users.filter(u => u.id !== id));
+
+  // Call central backend API
+  return await api.deleteStudent(id);
 }
 
 export function updateUserProgress(
@@ -255,7 +214,7 @@ export function updateUserProgress(
   const current = users[index];
   const newProgress = progressUpdater(current.progress);
   
-  // Check daily streak logic
+  // Streak validation
   const today = new Date().toISOString().split('T')[0];
   if (newProgress.lastActiveDate !== today) {
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -268,20 +227,32 @@ export function updateUserProgress(
     newProgress.todayXp = 0;
   }
 
-  users[index] = {
+  const updated: UserAccount = {
     ...current,
     lastLoginAt: new Date().toISOString(),
     progress: newProgress
   };
 
-  saveStoredUsers(users);
-  return users[index];
+  users[index] = updated;
+  saveStoredUsers([...users]);
+
+  // Synchronize with central backend asynchronously
+  api.syncProgress(userId, newProgress).catch(err => {
+    console.warn('Central progress sync error:', err);
+  });
+
+  return updated;
 }
 
 export function recordTestScore(
   userId: string,
   scoreData: Omit<TestScoreHistory, 'id' | 'date'>
 ): UserAccount | null {
+  // Call backend score recording asynchronously
+  api.recordTestScore(userId, scoreData).catch(err => {
+    console.warn('Central test score sync error:', err);
+  });
+
   return updateUserProgress(userId, prev => {
     const newRecord: TestScoreHistory = {
       id: 'score-' + Date.now(),

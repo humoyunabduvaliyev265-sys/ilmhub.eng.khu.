@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { UserAccount } from '../types';
-import {
-  getStoredUsers,
-  INITIAL_ADMIN_USERNAME,
-  ADMIN_SECURITY_CODE,
-  updateUserAccount
-} from '../utils/storage';
+import { api } from '../utils/api';
+import { ADMIN_SECURITY_CODE, INITIAL_ADMIN_USERNAME } from '../utils/storage';
 import {
   Lock,
   User,
@@ -18,7 +14,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Sun,
-  Moon
+  Moon,
+  Loader2
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -47,35 +44,27 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [showAdminPass, setShowAdminPass] = useState(false);
 
-  const handleStudentLogin = (e: React.FormEvent) => {
+  const handleStudentLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const users = getStoredUsers();
-      const trimmedUser = username.trim().toLowerCase();
-      const foundUser = users.find(
-        u => u.username.toLowerCase() === trimmedUser && u.password === password
-      );
-
-      if (!foundUser) {
-        setIsLoading(false);
-        setErrorMessage('Invalid username or password. Please check your credentials or contact your Administrator.');
-        return;
-      }
-
-      if (!foundUser.isActive) {
-        setIsLoading(false);
-        setErrorMessage('This account is currently deactivated. Please contact your Administrator for activation.');
-        return;
-      }
-
-      // Update last active
-      updateUserAccount(foundUser.id, { lastLoginAt: new Date().toISOString() });
+    try {
+      const res = await api.loginStudent(username.trim(), password);
       setIsLoading(false);
-      onLoginSuccess(foundUser, false);
-    }, 350);
+
+      if (!res.success || !res.user) {
+        setErrorMessage(
+          res.error || 'Invalid username or password. Please check your credentials or contact your Administrator.'
+        );
+        return;
+      }
+
+      onLoginSuccess(res.user, false);
+    } catch (err: any) {
+      setIsLoading(false);
+      setErrorMessage(err.message || 'Login connection failed. Please try again.');
+    }
   };
 
   const handleSecurityCodeSubmit = (e: React.FormEvent) => {
@@ -84,30 +73,29 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     if (securityCodeInput.trim() === ADMIN_SECURITY_CODE) {
       setAdminUnlocked(true);
-      const users = getStoredUsers();
-      const adminUser = users.find(
-        u => u.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase()
-      );
-      if (adminUser) {
-        setAdminPasswordInput(adminUser.password);
-      }
     } else {
       setSecurityError('Incorrect security code. Access is restricted to authorized personnel.');
     }
   };
 
-  const handleAdminDirectLogin = (e: React.FormEvent) => {
+  const handleAdminDirectLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const users = getStoredUsers();
-    const adminUser = users.find(
-      u => u.username.toLowerCase() === INITIAL_ADMIN_USERNAME.toLowerCase()
-    );
+    setSecurityError('');
+    setIsLoading(true);
 
-    if (adminUser && adminUser.password === adminPasswordInput) {
-      updateUserAccount(adminUser.id, { lastLoginAt: new Date().toISOString() });
-      onLoginSuccess(adminUser, true);
-    } else {
-      setSecurityError('Invalid Admin password.');
+    try {
+      const res = await api.loginAdmin(securityCodeInput.trim(), adminPasswordInput);
+      setIsLoading(false);
+
+      if (!res.success || !res.user) {
+        setSecurityError(res.error || 'Invalid Admin password.');
+        return;
+      }
+
+      onLoginSuccess(res.user, true);
+    } catch (err: any) {
+      setIsLoading(false);
+      setSecurityError(err.message || 'Admin authentication failed.');
     }
   };
 

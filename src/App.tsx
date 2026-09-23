@@ -6,8 +6,11 @@ import {
   updateUserProgress,
   updateUserAccount,
   getStoredTheme,
-  setStoredTheme
+  setStoredTheme,
+  saveStoredUsers,
+  setCurrentUserId
 } from './utils/storage';
+import { api, getAuthToken } from './utils/api';
 import { LoginModal } from './components/LoginModal';
 import { AdminPanel } from './components/AdminPanel';
 import { Navbar, NavSection } from './components/Navbar';
@@ -23,9 +26,14 @@ import { ProgressSection } from './components/ProgressSection';
 import { AchievementsSection } from './components/AchievementsSection';
 import { SettingsSection } from './components/SettingsSection';
 import { BrandLogo } from './components/BrandLogo';
+import { Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getCurrentUser());
+  const [isVerifyingSession, setIsVerifyingSession] = useState<boolean>(() => {
+    return Boolean(getAuthToken());
+  });
+
   const [isAdminView, setIsAdminView] = useState<boolean>(() => {
     const user = getCurrentUser();
     return user?.role === 'admin';
@@ -39,6 +47,36 @@ export default function App() {
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => getStoredTheme());
 
+  // Verify and sync active session from central database on mount
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      setIsVerifyingSession(false);
+      return;
+    }
+
+    api
+      .getMe()
+      .then(res => {
+        if (res.success && res.user) {
+          setCurrentUser(res.user);
+          setCurrentLevel(res.user.level || 'B1');
+          saveStoredUsers([res.user]);
+          setCurrentUserId(res.user.id);
+        } else {
+          // Account was deleted, disabled, or session expired on server
+          logoutUser();
+          setCurrentUser(null);
+        }
+      })
+      .catch(() => {
+        // Network offline fallback
+      })
+      .finally(() => {
+        setIsVerifyingSession(false);
+      });
+  }, []);
+
   // Apply theme to HTML root & persist to storage
   useEffect(() => {
     setStoredTheme(theme);
@@ -51,6 +89,8 @@ export default function App() {
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
     setCurrentLevel(user.level || 'B1');
+    setCurrentUserId(user.id);
+    saveStoredUsers([user]);
     if (user.role === 'admin') {
       setIsAdminView(true);
     } else {
@@ -76,7 +116,27 @@ export default function App() {
 
   const handleUpdateCurrentUser = (user: UserAccount) => {
     setCurrentUser(user);
+    saveStoredUsers([user]);
   };
+
+  // 0. VERIFYING SESSION FROM CENTRAL DATABASE
+  if (isVerifyingSession) {
+    return (
+      <div
+        className={`min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 ${
+          theme === 'dark' ? 'dark' : ''
+        }`}
+      >
+        <div className="flex flex-col items-center gap-4 text-center">
+          <BrandLogo size="lg" />
+          <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+            <span>Connecting to Central Database...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 1. IF NOT LOGGED IN: SHOW PROFESSIONAL LOGIN SCREEN (WITH HIDDEN ADMIN GATE)
   if (!currentUser) {

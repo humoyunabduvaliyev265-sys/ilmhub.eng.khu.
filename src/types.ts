@@ -29,9 +29,12 @@ export interface TestScoreHistory {
 export interface UserAccount {
   id: string;
   username: string;
-  password: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  groupClass?: string;
+  password?: string;
   role: 'student' | 'admin';
   isActive: boolean;
   createdAt: string;
